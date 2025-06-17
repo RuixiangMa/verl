@@ -547,13 +547,10 @@ class RayPPOTrainer:
             if len(v) == n:
                 base_data[k] = v
 
-        lines = []
-        for i in range(n):
-            entry = {k: v[i] for k, v in base_data.items()}
-            lines.append(json.dumps(entry, ensure_ascii=False))
-
         with open(filename, "w") as f:
-            f.write('\n'.join(lines) + '\n')
+            for i in range(n):
+                entry = {k: v[i] for k, v in base_data.items()}
+                f.write(json.dumps(entry, ensure_ascii=False) + "\n")
 
         print(f"Dumped generations to {filename}")
 

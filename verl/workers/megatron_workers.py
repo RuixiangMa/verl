@@ -566,7 +566,18 @@ class ActorRolloutRefWorker(MegatronWorker):
         self.checkpoint_mananager.save_checkpoint(local_path=checkpoint_path, hdfs_path=hdfs_path, global_step=global_step, max_ckpt_to_keep=max_ckpt_to_keep)
         torch.distributed.barrier()
         if self._is_offload_param:
-            offload_megatron_model_to_cpu(self.actor_module)
+            # Release the model data in GPU memory
+            for module in self.actor_module.modules():
+                for param in module.parameters(recurse=False):
+                    if param.data.is_cuda:
+                        del param.data
+                        if param.grad is not None:
+                            del param.grad
+            import gc
+            # Explicitly call garbage collection to clean up unused objects
+            gc.collect()
+            get_torch_device().empty_cache()
+            log_gpu_memory_usage("After releasing actor model data on GPU during save_checkpoint", logger=logger)
 
 
 class AsyncActorRolloutRefWorker(ActorRolloutRefWorker):
@@ -817,7 +828,18 @@ class CriticWorker(MegatronWorker):
             load_megatron_model_to_gpu(self.critic_module)
         self.checkpoint_mananager.save_checkpoint(local_path=checkpoint_path, hdfs_path=hdfs_path, global_step=global_steps, max_ckpt_to_keep=max_ckpt_to_keep)
         if self._is_offload_param:
-            offload_megatron_model_to_cpu(self.critic_module)
+            # Release the model data in GPU memory
+            for module in self.critic_module.modules():
+                for param in module.parameters(recurse=False):
+                    if param.data.is_cuda:
+                        del param.data
+                        if param.grad is not None:
+                            del param.grad
+            import gc
+            # Explicitly call garbage collection to clean up unused objects
+            gc.collect()
+            get_torch_device().empty_cache()
+            log_gpu_memory_usage("After releasing critic model data on GPU during save_checkpoint", logger=logger)
 
 
 class RewardModelWorker(MegatronWorker):

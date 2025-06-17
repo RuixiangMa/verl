@@ -777,7 +777,17 @@ class ActorRolloutRefWorker(Worker):
             log_with_rank(f"[rank-{self.rank}]: Saved LoRA adapter to: {lora_save_path}", rank=dist.get_rank(), logger=logger, log_only_rank_0=True)
 
         if self._is_offload_param:
-            offload_fsdp_model_to_cpu(self.actor_module_fsdp)
+            log_gpu_memory_usage("Before offloading actor model to CPU", logger=logger)
+            for param in self.actor_module_fsdp.parameters():
+                if param.data.is_cuda:
+                    param.data = param.data.cpu()
+                if param.grad is not None and param.grad.is_cuda:
+                    param.grad = param.grad.cpu()
+            import gc
+            gc.collect()
+            get_torch_device().empty_cache()
+            log_gpu_memory_usage("After offloading actor model to CPU", logger=logger)
+
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def load_checkpoint(self, local_path, hdfs_path=None, del_local_after_load=False):
@@ -1111,7 +1121,16 @@ class CriticWorker(Worker):
 
         torch.distributed.barrier()
         if self._is_offload_param:
-            offload_fsdp_model_to_cpu(self.critic_module)
+            log_gpu_memory_usage("Before offloading critic model to CPU", logger=logger)
+            for param in self.critic_module.parameters():
+                if param.data.is_cuda:
+                    param.data = param.data.cpu()
+                if param.grad is not None and param.grad.is_cuda:
+                    param.grad = param.grad.cpu()
+            import gc
+            gc.collect()
+            get_torch_device().empty_cache()
+            log_gpu_memory_usage("After offloading critic model to CPU", logger=logger)
 
     @register(dispatch_mode=Dispatch.ONE_TO_ALL)
     def load_checkpoint(self, local_path, hdfs_path=None, del_local_after_load=True):
